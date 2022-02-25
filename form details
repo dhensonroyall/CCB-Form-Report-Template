@@ -4,7 +4,7 @@ function formDetails(setupSheet,responseSheet,formId) {
   console.log(`Updating form ${formId}`)
 
   // API
-  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=form_detail&id=' + formId  
+  const url = 'https://yourchurch.ccbchurch.com/api.php?srv=form_detail&id=' + formId  
   const response = UrlFetchApp.fetch(url, auth);
   const xml = response.getContentText();
   const doc = XmlService.parse(xml);

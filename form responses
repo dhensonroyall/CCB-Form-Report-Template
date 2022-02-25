@@ -1,0 +1,218 @@
+function getFormResponses(formId,questionList,responseSheet,setupSheet) {
+  console.log('Updating form responses');
+
+  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=form_responses&form_id=' + formId  
+  const response = UrlFetchApp.fetch(url, auth);
+  const xml = response.getContentText();
+  const doc = XmlService.parse(xml);
+  const responses = doc.getRootElement().getChild('response').getChild('form_responses').getChildren();
+  setupSheet.getRange(10,1,1,2).setValues([['Responses',responses.length]])
+  const responseObj = new Array();
+  const headers = responseSheet.getRange(1,1,1,responseSheet.getLastColumn()).getValues().flat();
+  
+  const ssArray = new Array();
+
+  let needCarrierSub = false;
+  let needMaritalSub = false;
+
+  if (responses.length > 0) {
+    for (let i in responses) {
+      let resp = responses[i];
+      let item = new Array();
+      
+      // Add response ID, Link to matched profile, profile name, and created date
+      let responseId = resp.getAttribute('id').getValue();
+      item.push({title: 'Response ID', answer:  responseId});
+      item.push({title: 'Matched Profile', answer: resp.getChild('individual') ? 
+                'https://resonatechurch.ccbchurch.com/goto/individuals/' + resp.getChild('individual').getAttribute('id').getValue() :
+                null});
+      item.push({title: 'Profile Name', answer: resp.getChildText('individual') ? resp.getChildText('individual') : null});
+      item.push({title: 'Created', answer: resp.getChildText('created') ? resp.getChildText('created') : null});
+
+      // Add profile fields, combining address and renaming field names
+      let mailingAddress = new Object();
+      let prof = resp.getChild('profile_fields').getChildren();
+      for (let i in prof) {
+        let title = prof[i].getAttribute('name').getValue();
+        let answer = prof[i].getText();
+
+        if (title == 'carrier_mobile') {
+          needCarrierSub = true;
+        } else if (title == 'marital_status') {
+          needMaritalSub = true
+        };
+        
+        if (title.indexOf('mailing_') == 0) {
+          mailingAddress[title] = answer;
+        } else {
+          title = fieldNameSubs[title];
+          item.push({title: title, answer: answer});
+        };
+      };
+
+      if (mailingAddress) {
+        let title = 'Address';
+        let answer = [
+          mailingAddress.mailing_street,
+          mailingAddress.mailing_city,
+          mailingAddress.mailing_state,
+          mailingAddress.mailing_zip
+        ];
+        answer = answer.filter(Boolean).join(', ');
+        item.push({title: title, answer: answer})
+      }
+      
+      // Add answer fields, using questionList 
+      let ans = resp.getChild('answers').getChildren();
+      let checkboxOptions = new Object;
+      for (let i = 0; i < ans.length; i+=4) {
+        let title = ans[i].getText();
+        let value = ans[+i+1].getText();
+        let choice = ans[+i+2].getText();
+        let option = ans[+i+3].getText();
+        let type,header,answer;
+        for (let i in questionList) {
+          if (title == questionList[i].title) {
+            type = questionList[i].type;
+          };
+        };
+        if (type == 'Scale') {
+          header = `${title}: ${option}`;
+          answer = choice;
+        } else if (type == 'Prioritize' || type == 'Product/Ticket' || type == 'Donation Amount') {
+          header = `${title}: ${choice}`;
+          answer = value;
+        } else if (type == 'Checkboxes') {
+          header = title;
+          checkboxOptions[title] = checkboxOptions[title] ?
+            checkboxOptions[title] + ' | ' + choice :
+            choice;
+          answer = checkboxOptions[title];
+        } else {
+          header = title;
+          answer = value;
+        }
+
+        item.push({
+          title: header,
+          answer: answer
+        });
+      };
+
+      let payment = resp.getChild('payment_info');
+      if (payment.getChildren().length > 0) {
+        let amount,status;
+        amount = payment.getChildText('amount');
+        status = payment.getChildText('status');
+        item.push({title: 'Pymt Amount', answer: amount});
+        item.push({title: 'Pymt Status', answer: status});
+      };   
+
+      responseObj.push(item);
+      for (let i in item) {
+        let title = item[i].title;
+        let newHeader = true;
+        for (let j in headers) {
+          if (headers[j] == title) {
+            newHeader = false;
+          };
+        };
+        if (newHeader) {
+          headers.push(title)
+        };
+      };
+    };
+
+    for (let i in responseObj) {
+      let response = responseObj[i];
+      let oneRow = new Array();
+      for (let j in headers) {
+        let header = headers[j];
+        let hasAnswer = false;
+        let title,answer;
+        for (let k = response.length-1; k>=0; k--) {
+          title = response[k].title;
+          answer = response[k].answer;
+          if (title == header) {
+            hasAnswer = true;
+            break;
+          };
+        };
+        if (hasAnswer) {
+          oneRow.push(answer);
+        } else {
+          oneRow.push(null);
+        }
+      };
+      ssArray.push(oneRow);
+    };
+
+
+    if (needCarrierSub) {
+      let carrierIndex = headers.indexOf('Carrier');
+      let carrierList = getMobileCarrierList();
+      ssArray.forEach(row => subMobileCarrier(carrierIndex,row,carrierList));
+    };
+
+    if (needMaritalSub) {
+      let maritalIndex = headers.indexOf('Marital Status');
+      ssArray.forEach(row => subMaritalStatus(maritalIndex,row));
+    };
+
+    if (ssArray.length > 0) {
+      ssArray.unshift(headers);
+      responseSheet.getRange(1,1,ssArray.length,headers.length).setValues(ssArray);
+    };
+  }
+}
+
+function getMobileCarrierList() {
+  console.log('Updating mobile carriers');
+  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=mobile_carrier_list'  
+  const response = UrlFetchApp.fetch(url, {'headers':{'Authorization':'Basic RFJveWFsbDpHcjhjb21taXNz'}});
+  const xml = response.getContentText();
+  const doc = XmlService.parse(xml);
+  const responses = doc.getRootElement().getChild('response').getChild('mobile_carriers').getChildren();
+  const carrierList = new Object();
+
+  for (let i in responses) {
+    let res = responses[i];
+    let id = res.getAttribute('id').getValue();
+    let name = res.getChildText('name');
+    carrierList[id] = name;
+  }
+  return carrierList
+}
+
+function subMobileCarrier(index,row,carrierList) {
+  let carrierId = row[index];
+  if (!carrierId) {return row};
+  let carrierName = carrierList[carrierId];
+  row[index] = carrierName;
+  return row;
+}
+
+function subMaritalStatus(index,row) {
+  const maritalStatusList = {
+    s: 'single',
+    m: 'married',
+    w: 'widowed',
+    d: 'divorced',
+    p: 'separated'
+  };
+  let maritalId = row[index];
+  if (!maritalId) {return row};
+  let maritalName = maritalStatusList[maritalId];
+  row[index] = maritalName;
+  return row;
+}
+ 
+function toTitleCase(str) {
+  return str
+    .replace("_"," ")
+    .replace(/\w\S*/g,
+    function(txt) {
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    }
+  );
+}

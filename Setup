@@ -1,0 +1,91 @@
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+const ui = SpreadsheetApp.getUi();
+const auth = {'headers':{'Authorization':'Basic ****'}};
+const fieldNameSubs = {
+  name_first: 'First',
+  name_last: 'Last',
+  email_primary: 'Email',
+  mailing_street: 'Street',
+  mailing_city: 'City',
+  mailing_state: 'State',
+  mailing_zip: 'Zip',
+  phone_mobile: 'Cell Phone',
+  carrier_mobile: 'Carrier',
+  birthday: 'Birthday',
+  email: 'Email',
+  first_name: 'First',
+  gender: 'Gender',
+  home_phone: 'Home Phone',
+  last_name: 'Last',
+  mailing_address: 'Address',
+  marital_status: 'Marital status',
+  mobile_carrier: 'Carrier',
+  mobile_phone: 'Cell Phone',
+  work_phone: 'Work Phone'
+}
+
+function onOpen() {
+  ui.createMenu('Update Form Settings')
+    .addItem('Update Form Responses Now','updateForm')
+    .addItem('Set weekly update','weekTrigger')
+    .addItem('Set daily update','dayTrigger')
+    .addItem('Remove auto-update','deleteTriggers')
+    .addToUi();
+}
+
+function deleteTriggers(no) {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  if (!no) {
+    ui.alert(`Auto-update removed, thank you.`)
+  }
+}
+
+function dayTrigger() {
+  const now = new Date()
+  let hour = now.getHours();
+  deleteTriggers('no alert');
+  ScriptApp.newTrigger('updateForm').timeBased().atHour(hour).everyDays(1).create();
+  hour = hour > 12 ? +hour-12 + 'pm' : hour == 12 ? hour + 'pm' : hour + 'am';
+  ui.alert(`Form responses set to update daily around ${hour}. \n\n Please remember to remove auto-update when you're done with this or other form response sheets.`)
+}
+
+function weekTrigger() {
+  const now = new Date();
+  const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const scriptWeekday = [
+    ScriptApp.WeekDay.SUNDAY,
+    ScriptApp.WeekDay.MONDAY,
+    ScriptApp.WeekDay.TUESDAY,
+    ScriptApp.WeekDay.WEDNESDAY,
+    ScriptApp.WeekDay.THURSDAY,
+    ScriptApp.WeekDay.FRIDAY,
+    ScriptApp.WeekDay.SATURDAY
+  ];
+  let day = now.getDay();
+  let hour = now.getHours();
+  deleteTriggers('no alert');
+  ScriptApp.newTrigger('updateForm').timeBased().atHour(hour).onWeekDay(scriptWeekday[day]).everyWeeks(1).create()
+  hour = hour > 12 ? +hour-12 + 'pm' : hour == 12 ? hour + 'pm' : hour + 'am';
+  ui.alert(`Form responses set to update weekly around ${hour} every ${weekdays[day]}. \n\n Please remember to remove auto-update when you're done with this or other form response sheets.`)
+}
+
+function updateForm() {
+
+  // Get form ID
+  const setupSheet = ss.getSheetByName('Setup');
+  const responseSheet = ss.getSheetByName('Form Responses');
+  
+  let formId = setupSheet.getRange(1,2).getValue();
+  formId = formId.split(/[\/\?=&]/g);
+  let idIndex = formId.indexOf('forms') >=0 ? formId.indexOf('forms') + 1 : 
+    formId.indexOf('form_id') >=0 ? formId.indexOf('form_id') + 1 :
+    formId.indexOf('id') >=0 ? formId.indexOf('id') + 1 : null;
+  formId = idIndex ? formId[idIndex] : null;
+
+  if (formId > 0) {
+    formDetails(setupSheet,responseSheet,formId);
+  } else {
+    ui.alert('No Form ID found in URL. Please try a different URL');
+  };
+}

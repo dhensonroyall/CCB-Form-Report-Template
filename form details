@@ -1,0 +1,135 @@
+
+
+function formDetails(setupSheet,responseSheet,formId) {
+  console.log(`Updating form ${formId}`)
+
+  // API
+  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=form_detail&id=' + formId  
+  const response = UrlFetchApp.fetch(url, auth);
+  const xml = response.getContentText();
+  const doc = XmlService.parse(xml);
+
+  // Get form details
+  console.log('Updating details');
+  if (doc.getRootElement().getChild('response').getChild('forms').getAttribute('count').getValue() == 0) {
+    ui.alert('No form found. Please try a different URL');
+    return;
+  };
+  const form = doc.getRootElement().getChild('response').getChild('forms').getChild('form');
+  let title,site,startDate,endDate,status,public,published,disabled,createdBy,modifiedBy,createdDate,modifiedDate;
+
+  title = form.getChildText('title');
+  site = form.getChildText('campus');
+  startDate = new Date(form.getChildText('start'));
+  endDate = form.getChildText('end') == '' ? 'None' : new Date(form.getChildText('end'))
+  status = form.getChildText('status');
+
+  public = form.getChildText('public') == true ? 'public' : null;
+  published = form.getChildText('published') == false ? 'not published' : null;
+  disabled = form.getChildText('disabled') == true ? 'disabled' : null;
+  status = [status,public,published,disabled].filter(Boolean).join(', ');
+  
+  createdBy = form.getChild('creator').getAttribute('value').getValue();
+  createdDate = new Date(form.getChildText('created'))
+  createdBy = createdBy + ' ' + Utilities.formatDate(createdDate,"PST","M/dd/yyyy H:mm a")
+
+  modifiedBy = form.getChild('modifier').getAttribute('value').getValue();
+  modifiedDate = new Date(form.getChildText('modified'))
+  modifiedBy = modifiedBy + ' ' + Utilities.formatDate(modifiedDate,"PST","M/dd/yyyy H:mm a")
+
+  const formDetails = [['Title',title],['Site',site],['Start',startDate],['End',endDate],['Status',status],['Created by',createdBy],['Modified by',modifiedBy]];
+  setupSheet.getRange(3,1,formDetails.length,2).clearContent().setValues(formDetails);
+
+  // Get and save form questions, add headers to response sheet, then get responses
+  const questionList = getFormQuestions(form);
+
+  const existingHeaders = responseSheet.getLastColumn() > 0 ? responseSheet.getRange(1,1,1,responseSheet.getLastColumn()).getValues().flat() : null;
+  const newHeaders = new Array();
+  const responseHeaders = ['Response ID','Matched Profile','Profile Name','Created'];
+  for (let i in questionList) {
+    let headers = questionList[i].headers;
+    if (typeof headers == 'Object') {
+      for (let j in headers) {
+        responseHeaders.push(headers[j])
+      };
+    } else {
+      responseHeaders.push(headers);
+    }
+
+  };
+  for (let i in responseHeaders) {
+    let header = responseHeaders[i];
+    let isNew = true;
+    for (let k in existingHeaders) {
+      if (existingHeaders[k] == header) {
+        isNew = false;
+        break;
+      };
+    };
+    if (isNew) {
+      newHeaders.push(header);
+    }
+  }
+
+  if (newHeaders.length > 0) {
+    responseSheet.getRange(1,responseSheet.getLastColumn()+1,1,newHeaders.length).setValues([newHeaders]);
+  };
+
+  getFormResponses(formId,questionList,responseSheet,setupSheet);
+
+}
+
+function getFormQuestions(form) {
+  console.log('Updating question list');
+  const questions = form.getChild('questions').getChildren();
+  const fields = form.getChild('profile').getChild('fields').getChildren();
+  const list = new Array();
+
+  for (let i in fields) {
+    let field = fields[i];
+    let title = field.getChildText('name');
+    title = fieldNameSubs[title];
+    let type = 'field'
+    list.push({title: title, type: type, headers: title})
+  }
+
+  for (let i in questions) {
+    let question = questions[i];
+    let title = question.getChildText('title');
+    let type = question.getChildText('questionType');
+    let headers = new Array();
+    if (type == 'Scale') {
+      let options = question.getChild('options').getChildren();
+      for (let j in options) {
+        let option = options[j].getChildText('name');
+        headers.push(`${title}: ${option}`)
+      }
+    } else if (type == 'Prioritize' || type == 'Product/Ticket' || type == 'Donation Amount') {
+      let choices = question.getChild('choices').getChildren();
+      for (let j in choices) {
+        let choice = choices[j].getChildText('name');
+        headers.push(`${title}: ${choice}`)
+      }
+    } else {
+      headers.push(title);
+    }
+    list.push({
+      title: title,
+      type: type,
+      headers: headers
+    })
+  }
+
+  return list;
+}
+
+
+
+
+
+
+
+
+
+
+

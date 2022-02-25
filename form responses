@@ -168,7 +168,7 @@ function getFormResponses(formId,questionList,responseSheet,setupSheet) {
 
 function getMobileCarrierList() {
   console.log('Updating mobile carriers');
-  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=mobile_carrier_list'  
+  const url = 'https://yourchurch.ccbchurch.com/api.php?srv=mobile_carrier_list'  
   const response = UrlFetchApp.fetch(url, {'headers':{'Authorization':'Basic RFJveWFsbDpHcjhjb21taXNz'}});
   const xml = response.getContentText();
   const doc = XmlService.parse(xml);

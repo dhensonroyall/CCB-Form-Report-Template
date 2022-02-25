@@ -1,7 +1,7 @@
 function getFormResponses(formId,questionList,responseSheet,setupSheet) {
   console.log('Updating form responses');
 
-  const url = 'https://resonatechurch.ccbchurch.com/api.php?srv=form_responses&form_id=' + formId  
+  const url = 'https://yourchurch.ccbchurch.com/api.php?srv=form_responses&form_id=' + formId  
   const response = UrlFetchApp.fetch(url, auth);
   const xml = response.getContentText();
   const doc = XmlService.parse(xml);
@@ -24,7 +24,7 @@ function getFormResponses(formId,questionList,responseSheet,setupSheet) {
       let responseId = resp.getAttribute('id').getValue();
       item.push({title: 'Response ID', answer:  responseId});
       item.push({title: 'Matched Profile', answer: resp.getChild('individual') ? 
-                'https://resonatechurch.ccbchurch.com/goto/individuals/' + resp.getChild('individual').getAttribute('id').getValue() :
+                'https://yourchurch.ccbchurch.com/goto/individuals/' + resp.getChild('individual').getAttribute('id').getValue() :
                 null});
       item.push({title: 'Profile Name', answer: resp.getChildText('individual') ? resp.getChildText('individual') : null});
       item.push({title: 'Created', answer: resp.getChildText('created') ? resp.getChildText('created') : null});

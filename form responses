@@ -82,7 +82,7 @@ function getFormResponses(formId,questionList,responseSheet,setupSheet) {
         } else if (type == 'Prioritize' || type == 'Product/Ticket' || type == 'Donation Amount') {
           header = `${title}: ${choice}`;
           answer = value;
-        } else if (type == 'Checkboxes') {
+        } else if (type == 'Checkboxes' || type == 'Pulldown Menu') {
           header = title;
           checkboxOptions[title] = checkboxOptions[title] ?
             checkboxOptions[title] + ' | ' + choice :
@@ -169,7 +169,7 @@ function getFormResponses(formId,questionList,responseSheet,setupSheet) {
 function getMobileCarrierList() {
   console.log('Updating mobile carriers');
   const url = 'https://yourchurch.ccbchurch.com/api.php?srv=mobile_carrier_list'  
-  const response = UrlFetchApp.fetch(url, {'headers':{'Authorization':'Basic RFJveWFsbDpHcjhjb21taXNz'}});
+  const response = UrlFetchApp.fetch(url, {'headers':{'Authorization':'Basic ####'}});
   const xml = response.getContentText();
   const doc = XmlService.parse(xml);
   const responses = doc.getRootElement().getChild('response').getChild('mobile_carriers').getChildren();
